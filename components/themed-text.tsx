@@ -16,11 +16,53 @@ export function ThemedText({
   ...rest
 }: ThemedTextProps) {
   const color = useThemeColor({ light: lightColor, dark: darkColor }, 'text');
-
   return (
     <Text
       style={[
         { color },
+        type === 'default' ? styles.default : undefined,
+        type === 'title' ? styles.title : undefined,
+        type === 'defaultSemiBold' ? styles.defaultSemiBold : undefined,
+        type === 'subtitle' ? styles.subtitle : undefined,
+        type === 'link' ? styles.link : undefined,
+        style,
+      ]}
+      {...rest}
+    />
+  );
+}
+
+// COMPONENTES COM CORES FIXAS
+export function ThemedTextLight({
+  style,
+  type = 'default',
+  ...rest
+}: TextProps & { type?: 'default' | 'title' | 'defaultSemiBold' | 'subtitle' | 'link' }) {
+  return (
+    <Text
+      style={[
+        { color: '#FFFFFF' },
+        type === 'default' ? styles.default : undefined,
+        type === 'title' ? styles.title : undefined,
+        type === 'defaultSemiBold' ? styles.defaultSemiBold : undefined,
+        type === 'subtitle' ? styles.subtitle : undefined,
+        type === 'link' ? styles.link : undefined,
+        style,
+      ]}
+      {...rest}
+    />
+  );
+}
+
+export function ThemedTextDark({
+  style,
+  type = 'default',
+  ...rest
+}: TextProps & { type?: 'default' | 'title' | 'defaultSemiBold' | 'subtitle' | 'link' }) {
+  return (
+    <Text
+      style={[
+        { color: '#444444' },
         type === 'default' ? styles.default : undefined,
         type === 'title' ? styles.title : undefined,
         type === 'defaultSemiBold' ? styles.defaultSemiBold : undefined,
