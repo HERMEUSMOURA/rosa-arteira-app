@@ -12,7 +12,15 @@ import {
   Dimensions,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { getOrdersWithDetails, updateOrderStatus, Order, User, getStoredProductById, StoredProduct } from "../../hooks/storage";
+import { 
+  getOrdersWithDetails, 
+  updateOrderStatus, 
+  Order, 
+  User, 
+  getStoredProductById, 
+  StoredProduct,
+  Address // ✅ ADICIONE: Tipo Address
+} from "../../hooks/storage";
 
 type OrderWithDetails = Order & { 
   user?: User;
@@ -138,49 +146,56 @@ export default function OrdersScreen() {
     return colorMap[status];
   };
 
+  // ✅ Formatar endereço completo
+  const formatAddress = (address: Address) => {
+    return `${address.street}, ${address.number}${
+      address.complement ? ` - ${address.complement}` : ''
+    } - ${address.neighborhood}, ${address.city} - ${address.state}, CEP: ${address.zipCode}`;
+  };
+
   // ✅ Formatar data
-const formatDate = (dateString: string) => {
-  try {
-    // Tenta converter a string de data
-    const date = new Date(dateString);
-    
-    // Verifica se a data é válida
-    if (isNaN(date.getTime())) {
-      // Se não for válida, tenta alternativas
-      if (dateString.includes('/')) {
-        // Formato brasileiro: DD/MM/YYYY HH:MM
-        const [datePart, timePart] = dateString.split(' ');
-        const [day, month, year] = datePart.split('/');
-        const correctedDate = new Date(`${year}-${month}-${day}T${timePart || '00:00'}`);
-        
-        if (!isNaN(correctedDate.getTime())) {
-          return correctedDate.toLocaleDateString('pt-BR', {
-            day: '2-digit',
-            month: '2-digit',
-            year: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit'
-          });
+  const formatDate = (dateString: string) => {
+    try {
+      // Tenta converter a string de data
+      const date = new Date(dateString);
+      
+      // Verifica se a data é válida
+      if (isNaN(date.getTime())) {
+        // Se não for válida, tenta alternativas
+        if (dateString.includes('/')) {
+          // Formato brasileiro: DD/MM/YYYY HH:MM
+          const [datePart, timePart] = dateString.split(' ');
+          const [day, month, year] = datePart.split('/');
+          const correctedDate = new Date(`${year}-${month}-${day}T${timePart || '00:00'}`);
+          
+          if (!isNaN(correctedDate.getTime())) {
+            return correctedDate.toLocaleDateString('pt-BR', {
+              day: '2-digit',
+              month: '2-digit',
+              year: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit'
+            });
+          }
         }
+        
+        // Se ainda não conseguir, retorna a string original ou mensagem
+        return 'Data não disponível';
       }
       
-      // Se ainda não conseguir, retorna a string original ou mensagem
-      return 'Data não disponível';
+      // Se a data for válida, formata normalmente
+      return date.toLocaleDateString('pt-BR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    } catch (error) {
+      console.error('Erro ao formatar data:', error, 'String original:', dateString);
+      return 'Data inválida';
     }
-    
-    // Se a data for válida, formata normalmente
-    return date.toLocaleDateString('pt-BR', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-  } catch (error) {
-    console.error('Erro ao formatar data:', error, 'String original:', dateString);
-    return 'Data inválida';
-  }
-};
+  };
 
   // ✅ Formatar valor
   const formatCurrency = (value: number) => {
@@ -309,6 +324,36 @@ const formatDate = (dateString: string) => {
                   {order.customerName || order.user?.name || 'Cliente'} • {order.customerEmail || order.user?.email}
                 </Text>
               </View>
+
+              {/* ✅ ✅ ADICIONE: SEÇÃO DE ENDEREÇO DE ENTREGA */}
+              {'shippingAddress' in order && order.shippingAddress && (
+                <View style={styles.addressSection}>
+                  <View style={styles.addressHeader}>
+                    <Ionicons name="location-outline" size={16} color="#886364" />
+                    <Text style={styles.addressTitle}>Endereço de Entrega:</Text>
+                  </View>
+                  <View style={styles.addressCard}>
+                    <Text style={styles.addressStreet}>
+                      {order.shippingAddress.street}, {order.shippingAddress.number}
+                      {order.shippingAddress.complement && ` - ${order.shippingAddress.complement}`}
+                    </Text>
+                    <Text style={styles.addressNeighborhood}>
+                      {order.shippingAddress.neighborhood}
+                    </Text>
+                    <Text style={styles.addressCity}>
+                      {order.shippingAddress.city} - {order.shippingAddress.state}
+                    </Text>
+                    <Text style={styles.addressZip}>
+                      CEP: {order.shippingAddress.zipCode}
+                    </Text>
+                    {order.shippingAddress.isDefault && (
+                      <View style={styles.defaultBadge}>
+                        <Text style={styles.defaultBadgeText}>Padrão</Text>
+                      </View>
+                    )}
+                  </View>
+                </View>
+              )}
 
               {/* ✅ ITENS DO PEDIDO - VERSÃO MELHORADA */}
               <View style={styles.itemsContainer}>
@@ -568,6 +613,66 @@ const styles = StyleSheet.create({
     color: '#886364',
     marginLeft: 6,
     flex: 1,
+  },
+  // ✅ ADICIONE: Estilos para a seção de endereço
+  addressSection: {
+    marginBottom: 12,
+    padding: 12,
+    backgroundColor: '#f9f9f9',
+    borderRadius: 8,
+    borderLeftWidth: 3,
+    borderLeftColor: '#D9A59A',
+  },
+  addressHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  addressTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#181111',
+    marginLeft: 6,
+  },
+  addressCard: {
+    backgroundColor: '#fff',
+    padding: 10,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#e8e8e8',
+  },
+  addressStreet: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#181111',
+    marginBottom: 2,
+  },
+  addressNeighborhood: {
+    fontSize: 13,
+    color: '#666',
+    marginBottom: 2,
+  },
+  addressCity: {
+    fontSize: 13,
+    color: '#666',
+    marginBottom: 2,
+  },
+  addressZip: {
+    fontSize: 13,
+    color: '#666',
+  },
+  defaultBadge: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#7BBF93',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+    marginTop: 4,
+  },
+  defaultBadgeText: {
+    fontSize: 10,
+    color: '#fff',
+    fontWeight: '600',
   },
   itemsContainer: {
     marginBottom: 12,

@@ -7,6 +7,7 @@ const USERS_KEY = "@usuarios_app";
 const PRODUCTS_KEY = "@products";
 const CART_KEY = "@cart";
 const ORDERS_KEY = "@orders";
+const ADDRESSES_KEY = "@user_addresses";
 
 /**
  * Tipagens
@@ -15,8 +16,8 @@ export type User = {
   id: string;
   name: string;
   email: string;
-  password: string; // ✅ ADICIONE: Para autenticação
-  role: 'admin' | 'user'; // ✅ ADICIONE: Tipo de usuário
+  password: string; 
+  role: 'admin' | 'user'; 
   createdAt: string;
   [k: string]: any;
 };
@@ -24,7 +25,7 @@ export type User = {
 export type ProductHistory = {
   type: 'created' | 'sold' | 'updated' | 'stock_updated';
   date: string;
-  by: string; // userId
+  by: string; 
   details?: {
     orderId?: string;
     quantity?: number;
@@ -32,7 +33,7 @@ export type ProductHistory = {
     customerName?: string;
     previousStock?: number;
     newStock?: number;
-    changes?: Record<string, any>; // Campos alterados
+    changes?: Record<string, any>; 
   };
 };
 
@@ -46,14 +47,13 @@ export type StoredProduct = {
   stock?: number;
   createdBy: string;
   createdAt: string;
-  history: ProductHistory[]; // ✅ NOVO: Histórico completo
-  totalSold: number; // ✅ NOVO: Total vendido
-  lastSoldAt?: string; // ✅ NOVO: Última venda
-  [k: string]: any;
+  history: ProductHistory[]; 
+  totalSold: number; 
+  lastSoldAt?: string; 
 };
 
 export type CartEntry = {
-  id: string; // product id
+  id: string; 
   quantity: number;
 };
 
@@ -63,10 +63,24 @@ export type Order = {
   total: number;
   paymentMethod: string;
   items: CartEntry[];
-  userId: string; // ✅ ADICIONE: Quem fez o pedido
-  status: 'pending' | 'preparing' | 'shipped' | 'delivered'; // ✅ ADICIONE: Status do pedido
-  customerName?: string; // ✅ ADICIONE: Nome do cliente
-  customerEmail?: string; // ✅ ADICIONE: Email do cliente
+  userId: string; // 
+  status: 'pending' | 'preparing' | 'shipped' | 'delivered'; 
+  customerName?: string; 
+  customerEmail?: string; 
+  shippingAddress: Address;
+  estimatedDelivery?: string;
+  trackingCode?: string;
+};
+export type Address = {
+  id: string;
+  street: string;
+  number: string;
+  complement?: string;
+  neighborhood: string;
+  city: string;
+  state: string;
+  zipCode: string;
+  isDefault: boolean;
 };
 
 /**
@@ -121,7 +135,7 @@ export async function registerUser(userData: { name: string; email: string; pass
     }
 
     const newUser: User = {
-      id: Date.now().toString() + Math.random().toString(36).substr(2, 9), // ✅ ID mais único
+      id: Date.now().toString() + Math.random().toString(36).substr(2, 9), 
       name: userData.name,
       email: userData.email,
       password: userData.password,
@@ -177,13 +191,13 @@ export async function logoutUser(): Promise<void> {
   }
 }
 
-// Verificar se é admin
+
 export async function isAdmin(): Promise<boolean> {
   const user = await getCurrentUser();
   return user?.role === 'admin';
 }
 
-// ✅ ADICIONE: Criar usuário admin padrão (executar uma vez)
+
 export async function createDefaultAdmin(): Promise<void> {
   try {
     const users = await getUsers();
@@ -207,7 +221,7 @@ export async function createDefaultAdmin(): Promise<void> {
   }
 }
 
-// ✅ Atualizar lista de usuários
+
 export async function updateUsers(users: User[]): Promise<boolean> {
   try {
     await AsyncStorage.setItem(USERS_KEY, JSON.stringify(users));
@@ -222,7 +236,6 @@ export async function updateUsers(users: User[]): Promise<boolean> {
    PRODUCTS
    ------------------------ */
 
-/** Retorna apenas os produtos salvos (user products). Initial / built-in products you can keep in code. */
 export async function getProducts(): Promise<StoredProduct[]> {
   try {
     const raw = await AsyncStorage.getItem(PRODUCTS_KEY);
@@ -233,8 +246,7 @@ export async function getProducts(): Promise<StoredProduct[]> {
   }
 }
 
-// No storage.ts, ATUALIZE a função saveProduct:
-// ✅ CORREÇÃO: Adicione name e price no tipo
+
 export async function saveProduct(product: Omit<StoredProduct, 'id' | 'createdBy' | 'createdAt' | 'history' | 'totalSold'>): Promise<boolean> {
   try {
     const currentUser = await getCurrentUser();
@@ -433,6 +445,83 @@ export async function saveOrder(order: Order): Promise<boolean> {
 }
 
 /* ------------------------
+   ADDRESS MANAGEMENT
+   ------------------------ */
+
+// Obter endereços do usuário atual
+export async function getUserAddresses(): Promise<Address[]> {
+  try {
+    const currentUser = await getCurrentUser();
+    if (!currentUser) return [];
+    
+    const raw = await AsyncStorage.getItem(`${ADDRESSES_KEY}_${currentUser.id}`);
+    return safeParse<Address[]>(raw, []);
+  } catch (e) {
+    console.error("getUserAddresses error", e);
+    return [];
+  }
+}
+
+// Salvar endereço do usuário
+export async function saveUserAddress(address: Omit<Address, 'id'>): Promise<boolean> {
+  try {
+    const currentUser = await getCurrentUser();
+    if (!currentUser) return false;
+    
+    const addresses = await getUserAddresses();
+    const newAddress: Address = {
+      ...address,
+      id: Date.now().toString(),
+    };
+    
+    // Se for o primeiro endereço ou marcado como padrão, definir como padrão
+    if (addresses.length === 0 || address.isDefault) {
+      newAddress.isDefault = true;
+      // Remover padrão de outros endereços
+      addresses.forEach(addr => { addr.isDefault = false; });
+    }
+    
+    addresses.push(newAddress);
+    await AsyncStorage.setItem(`${ADDRESSES_KEY}_${currentUser.id}`, JSON.stringify(addresses));
+    return true;
+  } catch (e) {
+    console.error("saveUserAddress error", e);
+    return false;
+  }
+}
+
+// Obter endereço padrão do usuário
+export async function getDefaultAddress(): Promise<Address | null> {
+  try {
+    const addresses = await getUserAddresses();
+    return addresses.find(addr => addr.isDefault) || addresses[0] || null;
+  } catch (e) {
+    console.error("getDefaultAddress error", e);
+    return null;
+  }
+}
+
+// Definir endereço como padrão
+export async function setDefaultAddress(addressId: string): Promise<boolean> {
+  try {
+    const addresses = await getUserAddresses();
+    const updatedAddresses = addresses.map(addr => ({
+      ...addr,
+      isDefault: addr.id === addressId
+    }));
+    
+    const currentUser = await getCurrentUser();
+    if (!currentUser) return false;
+    
+    await AsyncStorage.setItem(`${ADDRESSES_KEY}_${currentUser.id}`, JSON.stringify(updatedAddresses));
+    return true;
+  } catch (e) {
+    console.error("setDefaultAddress error", e);
+    return false;
+  }
+}
+
+/* ------------------------
    STOCK / FINALIZE PURCHASE
    ------------------------ */
 
@@ -468,7 +557,10 @@ export async function decreaseStockBulk(counts: Record<string, number>): Promise
  *  { ok: true, order } on success
  *  { ok: false, reason: 'message' } on failure
  */
-export async function finalizePurchase(paymentMethod: string): Promise<{ ok: true; order: Order } | { ok: false; reason: string }> {
+export async function finalizePurchase(
+  paymentMethod: string, 
+  shippingAddress: Address // ✅ ADICIONE: Receber endereço
+): Promise<{ ok: true; order: Order } | { ok: false; reason: string }> {
   try {
     const cart = await getCart();
     if (!cart.length) return { ok: false, reason: "Carrinho vazio" };
@@ -526,7 +618,7 @@ export async function finalizePurchase(paymentMethod: string): Promise<{ ok: tru
 
     const order: Order = {
       id: Date.now().toString(),
-      date: new Date().toISOString(), // ✅ CORRIGIDO: Usar ISO string
+      date: new Date().toISOString(),
       total,
       paymentMethod,
       items: cart,
@@ -534,6 +626,9 @@ export async function finalizePurchase(paymentMethod: string): Promise<{ ok: tru
       status: 'pending',
       customerName: currentUser?.name,
       customerEmail: currentUser?.email,
+      // ✅ ADICIONE: Endereço de entrega
+      shippingAddress: shippingAddress,
+      estimatedDelivery: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 dias
     };
 
     await saveOrder(order);
@@ -546,7 +641,7 @@ export async function finalizePurchase(paymentMethod: string): Promise<{ ok: tru
   }
 }
 
-// ✅ ADICIONE: Função para obter produtos com histórico
+
 export async function getProductsWithHistory(): Promise<StoredProduct[]> {
   try {
     const products = await getProducts();
@@ -558,7 +653,7 @@ export async function getProductsWithHistory(): Promise<StoredProduct[]> {
   }
 }
 
-// ✅ ADICIONE: Função para obter produtos mais vendidos
+
 export async function getTopSellingProducts(limit: number = 10): Promise<StoredProduct[]> {
   try {
     const products = await getProducts();
@@ -572,7 +667,7 @@ export async function getTopSellingProducts(limit: number = 10): Promise<StoredP
   }
 }
 
-// ✅ ADICIONE: Função para obter produtos recentemente vendidos
+
 export async function getRecentlySoldProducts(limit: number = 10): Promise<StoredProduct[]> {
   try {
     const products = await getProducts();
@@ -592,7 +687,7 @@ export async function getRecentlySoldProducts(limit: number = 10): Promise<Store
    Small utilities
    ------------------------ */
 
-/** Compute cart totals based on stored products (returns total and detailed items) */
+
 export async function computeCartTotal(): Promise<{ total: number; detailed: Array<{ id: string; name?: string; price: number; quantity: number }>} > {
   try {
     const cart = await getCart();
@@ -619,7 +714,7 @@ export async function computeCartTotal(): Promise<{ total: number; detailed: Arr
    ADMIN DASHBOARD FUNCTIONS
    ------------------------ */
 
-// ✅ Obter estatísticas gerais
+
 export async function getAdminStats() {
   try {
     const [users, products, orders] = await Promise.all([
@@ -648,7 +743,7 @@ export async function getAdminStats() {
   }
 }
 
-// ✅ Atualizar status do pedido
+
 export async function updateOrderStatus(orderId: string, status: Order['status']): Promise<boolean> {
   try {
     const orders = await getOrders();
@@ -665,7 +760,7 @@ export async function updateOrderStatus(orderId: string, status: Order['status']
   }
 }
 
-// ✅ Excluir produto
+
 export async function deleteProduct(productId: string): Promise<boolean> {
   try {
     const products = await getProducts();
@@ -678,7 +773,7 @@ export async function deleteProduct(productId: string): Promise<boolean> {
   }
 }
 
-// ✅ Promover usuário para admin
+
 export async function promoteToAdmin(userId: string): Promise<boolean> {
   try {
     const users = await getUsers();
@@ -695,7 +790,7 @@ export async function promoteToAdmin(userId: string): Promise<boolean> {
   }
 }
 
-// ✅ Obter pedidos com informações completas
+
 export async function getOrdersWithDetails(): Promise<(Order & { user?: User })[]> {
   try {
     const orders = await getOrders();
@@ -734,6 +829,8 @@ export default {
   canAddToCart,
   removeOneFromCart,
   clearCart,
+  // address
+  
   // orders
   getOrders,
   saveOrder,
